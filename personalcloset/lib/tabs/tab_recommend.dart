@@ -13,6 +13,7 @@ class IntroScreen extends StatefulWidget {
 class _IntroScreenState extends State<IntroScreen> {
   Color? selectedColor;
   String? selectedImageUrl;
+  String? selectedCategory;
   final List<String> categories = ['상의', '신발', '악세서리', '하의'];
   bool showSelectionScreen = false;
   List<String> similarImages = [];
@@ -26,8 +27,14 @@ class _IntroScreenState extends State<IntroScreen> {
   Future<List<String>> findSimilarColors(Color selectedColor) async {
     similarImages.clear();
 
+    // 먼저 선택된 아이템을 리스트에 추가합니다.
+    if (selectedImageUrl != null && selectedCategory != null) {
+      similarImages.add(selectedImageUrl!);
+    }
+
     for (var category in categories) {
-      bool isColorFoundForCategory = false;
+      // 선택된 카테고리의 아이템은 이미 추가했으므로 건너뜁니다.
+      if (category == selectedCategory) continue;
 
       QuerySnapshot<Map<String, dynamic>> items = await FirebaseFirestore
           .instance
@@ -37,14 +44,13 @@ class _IntroScreenState extends State<IntroScreen> {
           .get();
 
       for (var item in items.docs) {
-        if (isColorFoundForCategory) break;
-
         String imageUrl = item['image'];
         Color itemColor = await getDominantColor(imageUrl);
 
         if (isSimilarColor(selectedColor, itemColor)) {
           similarImages.add(imageUrl);
-          isColorFoundForCategory = true;
+          // 각 카테고리별로 첫 번째 유사한 색상의 아이템만 찾습니다.
+          break;
         }
       }
     }
@@ -190,19 +196,32 @@ class _IntroScreenState extends State<IntroScreen> {
                         itemCount: snapshot.data!.docs.length,
                         itemBuilder: (context, index) {
                           var doc = snapshot.data!.docs[index];
+                          String currentCategory = category;
                           return InkWell(
                             onTap: () async {
-                              Color color =
+                              Color newColor =
                                   await getDominantColor(doc['image']);
-                              List<String> similarItems =
-                                  await findSimilarColors(color);
+                              String newCategory = category;
+
+                              // 새로운 선택을 위해 상태를 초기화합니다.
+                              List<String> newSimilarItems = [];
 
                               Navigator.pop(context);
 
                               setState(() {
-                                selectedColor = color;
+                                selectedColor = newColor;
+                                selectedCategory = newCategory;
                                 selectedImageUrl = doc['image'];
-                                similarImages = similarItems;
+                                similarImages =
+                                    newSimilarItems; // 초기화된 리스트를 설정합니다.
+                              });
+
+                              newSimilarItems =
+                                  await findSimilarColors(newColor);
+
+                              setState(() {
+                                similarImages =
+                                    newSimilarItems; // 새로운 유사한 이미지 리스트를 업데이트합니다.
                               });
                             },
                             child: Container(
@@ -234,3 +253,4 @@ class _IntroScreenState extends State<IntroScreen> {
     );
   }
 }
+
